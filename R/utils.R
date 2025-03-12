@@ -25,11 +25,12 @@ evaluate_plot_code <- function(code, env) {
 }
 
 content_image_ggplot <- function(plot, ...) {
-  plot_file <- tempfile(fileext = ".png")
-  on.exit(if (plot_file != "" && file.exists(plot_file)) unlink(plot_file))
+  plot_file <- withr::local_tempfile(fileext = ".png")
 
-  ggplot2::ggsave(plot_file, plot, device = "png")
-
+  suppressMessages(
+    ggplot2::ggsave(plot_file, plot, device = "png")
+  )
+  
   content_image_file(plot_file)
 }
 
