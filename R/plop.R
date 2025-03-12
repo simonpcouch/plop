@@ -88,12 +88,14 @@ plop <- function(context = rstudioapi::getActiveDocumentContext()) {
           contextBefore = fetch_code_context(context)$contextBefore,
           currentSelection = current_plot_code
         ),
-        env_context = btw::btw(globalenv(), clipboard = FALSE),
-        plot_encoded = plot_encoded
+        env_context = btw::btw(globalenv(), clipboard = FALSE)
       )
       
       suggestions_client <- suggestions_client()
-      suggestions_stream <- suggestions_client$stream_async(new_suggestions_prompt)
+      suggestions_stream <- suggestions_client$stream_async(
+        new_suggestions_prompt,
+        plot_encoded
+      )
       chat_append("chat", suggestions_stream, role = "assistant")
       .last_suggestions_client <<- suggestions_client
     }
@@ -182,15 +184,13 @@ plop <- function(context = rstudioapi::getActiveDocumentContext()) {
 # prompt helpers ---------------------------------------------------------------
 assemble_suggestions_turn <- function(
     code_context,
-    env_context = btw::btw(global_env(), clipboard = FALSE),
-    plot_encoded
+    env_context = btw::btw(global_env(), clipboard = FALSE)
 ) {
   paste0(
     c(
       xml_tag(code_context$contextBefore, "contextBefore"),
       xml_tag(code_context$currentSelection, "currentSelection"),
-      xml_tag(env_context, "envContext"),
-      xml_tag(plot_encoded, "currentPlot")
+      xml_tag(env_context, "envContext")
     ),
     collapse = "\n\n"
   )

@@ -20,23 +20,17 @@ evaluate_plot_code <- function(code, env) {
   plot <- eval(parse(text = code), envir = env)
   list(
     plot_obj = plot,
-    plot_encoded = plot_to_base64(plot)
+    plot_encoded = content_image_ggplot(plot)
   )
 }
 
-plot_to_base64 <- function(plot, ...) {
+content_image_ggplot <- function(plot, ...) {
   plot_file <- tempfile(fileext = ".png")
   on.exit(if (plot_file != "" && file.exists(plot_file)) unlink(plot_file))
 
-  png(plot_file, ...)
-  tryCatch(
-    {print(plot)},
-    finally = {
-      dev.off()
-    }
-  )
-  
-  base64enc::base64encode(plot_file)
+  ggplot2::ggsave(plot_file, plot, device = "png")
+
+  content_image_file(plot_file)
 }
 
 # from databot ----------------------------------------------------------------
