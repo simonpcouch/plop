@@ -46,6 +46,7 @@ plop <- function(context = rstudioapi::getActiveDocumentContext()) {
                      output,
                      session) {
     plot_env <- env_clone(global_env())
+    client <- client()
     
     # Use reactiveValues to store state
     rv <- reactiveValues(
@@ -54,57 +55,57 @@ plop <- function(context = rstudioapi::getActiveDocumentContext()) {
       plot_encoded = NULL
     )
     
-    # main two server actions -------------------------------------------------
-    # Given some plotting code and a plain-language instruction on how to change
-    # it, update the plotting code and run it
-    iterate_on_plot <- function(current_plot_code, instruction) {
-      plot_prompt <- assemble_plot_turn(
-        env_context = btw::btw(globalenv(), clipboard = FALSE),
-        instruction = instruction,
-        current_plot_code = current_plot_code
-      )
-      
-      plot_client <- plot_client()
-      new_plot_code <- plot_client$chat(plot_prompt, echo = FALSE)
-      
-      rv$current_plot_code <- new_plot_code
-      output$plot_code <- renderPrint({cat(new_plot_code)})
-      .last_plot_client <<- plot_client
-      
-      results <- evaluate_plot_code(new_plot_code, env = plot_env)
+    # main server action: generate plots ---------------------------------------
+    # takes plotting code and
+    # * displays it in the UI
+    # * runs the code to generate the plot
+    # * displays the plot in the UI
+    # * asks the model for suggestions based on it
+    generate_plot <- function(code, ...) {
+      rv$current_plot_code <- code
+      output$plot_code <- renderPrint({cat(code)})
+
+      results <- evaluate_plot_code(code, env = plot_env)
       rv$plot_obj <- results$plot_obj
       rv$plot_encoded <- results$plot_encoded
       
-      results$current_plot_code <- new_plot_code
-      
-      return(results)
-    }
-    
-    # Given some plotting code and the plot itself in B64, make 
-    # 4 plain-language suggestions on how to improve it
-    suggest_from_plot <- function(context, current_plot_code, plot_encoded) {
-      new_suggestions_prompt <- assemble_suggestions_turn(
-        code_context = list(
-          contextBefore = fetch_code_context(context)$contextBefore,
-          currentSelection = current_plot_code
-        ),
-        env_context = btw::btw(globalenv(), clipboard = FALSE)
-      )
-      
-      suggestions_client <- suggestions_client()
-      suggestions_stream <- suggestions_client$stream_async(
-        new_suggestions_prompt,
-        plot_encoded
-      )
-      chat_append("chat", suggestions_stream, role = "assistant")
-      .last_suggestions_client <<- suggestions_client
-    }
-    
-    output$plot <- renderPlot({
-      req(rv$plot_obj)
-      rv$plot_obj
-    })
+      output$plot <- renderPlot({
+        req(rv$plot_obj)
+        rv$plot_obj
+      })
 
+      results$plot_encoded
+    }
+
+    generate_plot_impl <- function(code, ...) {
+      # a la https://github.com/tidyverse/ellmer/pull/231
+      # tool calls results have to be a list like below, while `$chat()`
+      # and friends require the `<content>` objects.
+      results <- generate_plot(code, ...)
+
+      I(list(list(
+        type = "image",
+        source = list(
+          type = "base64",
+          media_type = results@type,
+          data = results@data
+        )
+      )))
+    }
+
+    generate_plot_tool <- 
+      tool(
+        generate_plot_impl,
+        "Given some ggplot2 plotting code, shows the plotting code to the user,
+         generates the plot by running the code, displays the plot to the user,
+         ultimately returns the plot, encoded as base64",
+        code = type_string(
+          "Valid ggplot2 plotting code."
+        )
+      )
+    
+    client$register_tool(generate_plot_tool)
+    
     # main server logic -------------------------------------------------------
     # The first time around, assume that if the user highlighted something,
     # they'd like it to be plotted. Allow a model to generate the first round
@@ -117,49 +118,26 @@ plop <- function(context = rstudioapi::getActiveDocumentContext()) {
         
         output$plot_code <- renderPrint({cat(initial_code)})
         
-        results <- evaluate_plot_code(initial_code, env = plot_env)
-        rv$plot_obj <- results$plot_obj
-        rv$plot_encoded <- results$plot_encoded
-        
-        current_code <- initial_code
-        plot_enc <- results$plot_encoded
-        
-        # Generate suggestions only after plot is displayed
-        session$onFlushed(function() {
-          suggest_from_plot(
-            context = context, 
-            current_plot_code = current_code, 
-            plot_encoded = plot_enc
-          )
-        })
+        results <- generate_plot(
+          initial_code,
+          assemble_context(context)
+        )
+
+        rv$plot_encoded <- results@data
+
+        stream <- client$stream_async(
+          assemble_context(context),
+          results
+        )
+        chat_append("chat", stream)
+        .stash_last_plop(client)
       }
     }, once = TRUE)
     
-    # When the user submits an instruction:
-    # 1) Prompt a model for plotting code
-    # 2) Run the plotting code and display it to the user
-    # 3) Submit the new plotting code and plot to a model to generate new
-    #    suggestions
     observeEvent(input$chat_user_input, {
-      current_code <- isolate(rv$current_plot_code)
-      
-      results <- iterate_on_plot(
-        current_plot_code = current_code,
-        instruction = input$chat_user_input
-      )
-      
-      # Store values in regular variables for the callback
-      updated_code <- isolate(rv$current_plot_code)
-      plot_enc <- isolate(rv$plot_encoded)
-      
-      # Then schedule suggestions to run after UI updates
-      session$onFlushed(function() {
-        suggest_from_plot(
-          context = context,
-          current_plot_code = updated_code, 
-          plot_encoded = plot_enc
-        )
-      })
+      stream <- client$stream_async(input$chat_user_input)
+      chat_append("chat", stream)
+      .stash_last_plop(client)
     })
 
     observeEvent(input$apply_btn, {
@@ -182,7 +160,7 @@ plop <- function(context = rstudioapi::getActiveDocumentContext()) {
 }
 
 # prompt helpers ---------------------------------------------------------------
-assemble_suggestions_turn <- function(
+assemble_context <- function(
     code_context,
     env_context = btw::btw(global_env(), clipboard = FALSE)
 ) {
@@ -196,36 +174,12 @@ assemble_suggestions_turn <- function(
   )
 }
 
-assemble_plot_turn <- function(
-  env_context = btw::btw(global_env(), clipboard = FALSE),
-  instruction,
-  current_plot_code
-) {
-  paste0(
-    c(
-      xml_tag(current_plot_code, "currentCode"),
-      xml_tag(env_context, "envContext"),
-      xml_tag(instruction, "instruction")
-    ),
-    collapse = "\n\n"
-  )
-}
-
 # clients (ellmer Chat objects) ------------------------------------------------
-suggestions_client <- function() {
+client <- function() {
   chat_claude(
     model = "claude-3-7-sonnet-latest",
     system_prompt = readLines(
-      system.file("prompt-suggestions.md", package = "plop")
-    )
-  )
-}
-
-plot_client <- function() {
-  chat_claude(
-    model = "claude-3-7-sonnet-latest",
-    system_prompt = readLines(
-      system.file("prompt-plot.md", package = "plop")
+      system.file("prompt-iterate.md", package = "plop")
     )
   )
 }
@@ -237,4 +191,16 @@ initial_client <- function() {
       system.file("prompt-initial.md", package = "plop")
     )
   )
+}
+
+.stash_last_plop <- function(x) {
+  if (!"pkg:plop" %in% search()) {
+    do.call(
+      "attach",
+      list(new.env(), pos = length(search()), name = "pkg:plop")
+    )
+  }
+  env <- as.environment("pkg:plop")
+  env$.last_plop <- x
+  invisible(NULL)
 }
