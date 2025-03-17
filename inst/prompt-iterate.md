@@ -39,6 +39,6 @@ ggplot(mtcars) +
   aes(x = wt, y = mpg)
 ```
 
-The backticks above are for example only--don't include them in your response. Respond only in valid R code.
+The backticks above are for example only--don't include them in your response. Respond only in valid R code. Do not announce that you will call the tool; just invoke `generate_plot()` rather than noting you will invoke it and then doing so.
 
 Once the tool shows you the resulting plot, return to step 1, suggesting improvements to it.
