@@ -27,18 +27,29 @@ plop <- function(context = rstudioapi::getActiveDocumentContext()) {
         card_header("Suggestions"),
         chat_ui("chat", placeholder = "Or add a free-form suggestion...")
       ),
-      layout_columns(row_heights = c(3, 1, 1), card(
+      card(
         card_header("Plot"),
         card_body(
-          plotOutput("plot", height = "400px")
-        ),
-        verbatimTextOutput("plot_code"),
-        div(
-          style = "display: flex; justify-content: flex-end; padding: 10px;",
-          actionButton("apply_btn", "Apply"),
-          actionButton("quit_btn", "Quit")
+          plotOutput("plot", height = "400px"),
+          div(
+            style = "display: flex; justify-content: space-between; padding-top: 10px;",
+            accordion(
+              accordion_panel(
+                "Plot Code",
+                verbatimTextOutput("plot_code"),
+                value = "plot_code_panel"
+              ),
+              open = FALSE,
+              id = "code_accordion"
+            ),
+            div(
+              style = "display: flex; gap: 10px;",
+              actionButton("apply_btn", "Apply"),
+              actionButton("quit_btn", "Quit")
+            )
+          )
         )
-      ))
+      )
     )
   )
   
