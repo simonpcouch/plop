@@ -1,3 +1,5 @@
+library(ggplot2)
+
 data(stackoverflow, package = "modeldata")
 
 # some plotting code
