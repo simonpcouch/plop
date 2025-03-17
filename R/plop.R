@@ -120,13 +120,19 @@ plop <- function(context = rstudioapi::getActiveDocumentContext()) {
         
         results <- generate_plot(
           initial_code,
-          assemble_context(context)
+          assemble_context(
+            code_context = fetch_code_context(context),
+            env_context = fetch_env_context(context$selection[[1]]$text)
+          )
         )
 
         rv$plot_encoded <- results@data
 
         stream <- client$stream_async(
-          assemble_context(context),
+          assemble_context(
+            code_context = fetch_code_context(context),
+            env_context = fetch_env_context(context$selection[[1]]$text)
+          ),
           results
         )
         chat_append("chat", stream)
@@ -162,7 +168,7 @@ plop <- function(context = rstudioapi::getActiveDocumentContext()) {
 # prompt helpers ---------------------------------------------------------------
 assemble_context <- function(
     code_context,
-    env_context = btw::btw(global_env(), clipboard = FALSE)
+    env_context
 ) {
   paste0(
     c(

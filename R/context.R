@@ -28,3 +28,18 @@ xml_tag <- function(x, name) {
     )
   }
 }
+
+fetch_env_context <- function(selection, env = global_env()) {
+  # split the selection up into "words", e.g.
+  # `ggplot(stackoverflow) + aes(x = Salary)` ->
+  # `c("ggplot", "stackoverflow", "aes", "x", "Salary")`.
+  # we're fine with this result being a superset of what we'd actually
+  # find to be meaningful symbols, as we ultimately just supply context
+  # on results that also appear in `names(env)`.
+  words <- unlist(regmatches(
+    selection,
+    gregexpr("\\b[A-Za-z][A-Za-z0-9._]*\\b", selection)
+  ))
+
+  btw::btw_this(env, items = words[words %in% names(env)])
+}
