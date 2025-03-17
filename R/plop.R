@@ -78,18 +78,19 @@ plop <- function(context = rstudioapi::getActiveDocumentContext()) {
     }
 
     generate_plot_impl <- function(code, ...) {
-      # inlines https://github.com/tidyverse/ellmer/blob/de953a38d97c90d40ca10ca830fdaa56bc97e7f3/R/provider-claude.R#L279
+      # a la https://github.com/tidyverse/ellmer/pull/231
       # tool calls results have to be a list like below, while `$chat()`
       # and friends require the `<content>` objects.
       results <- generate_plot(code, ...)
-      list(
+
+      I(list(list(
         type = "image",
         source = list(
           type = "base64",
           media_type = results@type,
           data = results@data
         )
-      )
+      )))
     }
 
     generate_plot_tool <- 
