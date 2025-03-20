@@ -37,3 +37,11 @@ You can install the development version of plop like so:
 ``` r
 pak::pak("simonpcouch/plop")
 ```
+
+# Example
+
+```{r}
+#| echo: false
+#| fig-alt: "A screencast of a Positron session. A script called example.R is open in the editor with some minimal ggplot2 lines, one of which will cause an error. I highlight the plotting lines and then press a keyboard shortcut to boot up a shiny app. The app runs the code, presents the image, and then makes suggestions to improve it based on the presented image. When I'm satisfied with the plot, I click 'Apply' to add the lines to my source file."
+knitr::include_graphics("https://github.com/user-attachments/assets/2e2abf2f-926d-4efa-99b0-6e23723039dc")
+```
