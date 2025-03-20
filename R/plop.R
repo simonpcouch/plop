@@ -32,7 +32,7 @@ plop <- function(context = rstudioapi::getActiveDocumentContext()) {
         card_body(
           plotOutput("plot", height = "400px"),
           div(
-            style = "display: flex; justify-content: space-between; padding-top: 10px;",
+            style = "padding-top: 10px;",
             accordion(
               accordion_panel(
                 "Plot Code",
@@ -41,12 +41,14 @@ plop <- function(context = rstudioapi::getActiveDocumentContext()) {
               ),
               open = FALSE,
               id = "code_accordion"
-            ),
-            div(
-              style = "display: flex; gap: 10px;",
-              actionButton("apply_btn", "Apply"),
-              actionButton("quit_btn", "Quit")
             )
+          )
+        ),
+        card_footer(
+          div(
+            style = "display: flex; justify-content: flex-end; gap: 10px;",
+            actionButton("apply_btn", "Apply"),
+            actionButton("quit_btn", "Quit")
           )
         )
       )
